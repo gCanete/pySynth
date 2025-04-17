@@ -27,33 +27,49 @@ key_to_freq = {
     'k': 523.25    # C5
 }
 
+def square_like_wave(freq, env):
+    return (
+        Sine(freq, mul=env * (1/1)) +
+        Sine(3*freq, mul=env * (1/3)) +
+        Sine(5*freq, mul=env * (1/5)) +
+        Sine(7*freq, mul=env * (1/7)) +
+        Sine(9*freq, mul=env * (1/9)) +
+        Sine(11*freq, mul=env * (1/11))
+    )
+
 def sound(freq, mode):
+    env = Adsr(attack=0.01, decay=0.2, sustain=0.5, release=0.1, dur=2, mul=0.5)
     if mode == 1:
-        # Simple Sine wave
-        return Sine(freq=freq, mul=0.2)
+        return Sine(freq=freq, mul=env), env
     elif mode == 2:
-        # Sawtooth wave
-        return SuperSaw(freq=freq, mul=0.2)
+        return SuperSaw(freq=freq, mul=env), env
     elif mode == 3:
-        # Square wave
-        return Sine(freq, mul=0.2) + Sine(3*freq)/3 + Sine(5*freq)/5 + Sine(7*freq)/7 + Sine(9*freq)/9 + Sine(11*freq)/11
-    else:
-        # Simple Sine wave
-        return Sine(freq=freq, mul=0.2)
+        return square_like_wave(freq, env), env
+    elif mode == 4:
+        return FM(carrier=freq, ratio=2, index=5, mul=env), env
+    return None, None
 
 # Function to start playing the note
 def start_note(key, mode, octave):
     freq = key_to_freq.get(key)
     if freq and key not in active_notes:
         oct_mult = 2 ** octave 
+        final_freq = oct_mult * freq
         # Create the sine wave and store it in active_notes
-        active_notes[key] = sound(oct_mult * freq, mode).out()
+        snd, env = sound(final_freq, mode)
+        snd.out()
+        env.play()
+        active_notes[key] = (snd, env)
 
 # Function to stop playing the note
 def stop_note(key):
     if key in active_notes:
-        active_notes[key].stop()  # Stop the sound
-        del active_notes[key]  # Remove from active notes
+        snd, env = active_notes[key]
+        # Release the envelope
+        env.stop()
+        # Stop the sound
+        snd.stop()
+        del active_notes[key]
 
 # Main loop to check for key presses
 mode = 1
@@ -65,7 +81,7 @@ try:
 
     print("######## PySynth ########")
     print("Controls:")
-    print(" - Press 'm' to change mode: 1 -> Sine | 2 -> Saw | 3 -> Square")
+    print(" - Press 'm' to change mode: 1 -> Sine | 2 -> Saw | 3 -> Square | 4 -> FM Modulation")
     print(" - Press '1' for Octave Down")
     print(" - Press '2' for Octave Up")
     print("#########################")
@@ -77,7 +93,7 @@ try:
         else:
             if m_was_pressed:
                 m_was_pressed = False
-                mode = (mode % 3) + 1
+                mode = (mode % 4) + 1
                 print(f"Mode: {mode}")
 
         # Handle octave up
